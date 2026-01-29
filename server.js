@@ -1,6 +1,13 @@
 const express = require('express');
 const path = require('path');
-const { register, requestCounter, refreshNuclearesMetrics, discoverNuclearesVariables } = require('./nuclearesExporter');
+const {
+  register,
+  requestCounter,
+  refreshNuclearesMetrics,
+  discoverNuclearesVariables,
+  getNuclearesPostVariables,
+  setNuclearesVariable,
+} = require('./nuclearesExporter');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -53,6 +60,26 @@ app.get('/metrics', async (req, res) => {
     res.end(metrics);
   } catch (err) {
     res.status(500).end(err.message);
+  }
+});
+
+// List Nucleares POST variables (control variables)
+app.get('/api/post-variables', (req, res) => {
+  const variables = getNuclearesPostVariables();
+  res.json({ variables });
+});
+
+// Set a Nucleares POST variable
+app.post('/api/post-variable', async (req, res) => {
+  const { variable, value } = req.body || {};
+  if (!variable || typeof value === 'undefined') {
+    return res.status(400).json({ ok: false, error: 'variable and value are required' });
+  }
+  try {
+    await setNuclearesVariable(variable, value);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

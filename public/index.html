@@ -143,6 +143,74 @@
         height: 40px;
         display: block;
       }
+      .metric-controls {
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .metric-controls-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.78rem;
+      }
+      .metric-controls-row input[type='text'] {
+        flex: 1;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(15, 23, 42, 0.9);
+        color: #e5e7eb;
+        font-size: 0.78rem;
+      }
+      .metric-controls-row button {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(90deg, #4f46e5, #6366f1);
+        color: white;
+        font-size: 0.76rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .toggle input {
+        display: none;
+      }
+      .toggle-pill {
+        width: 32px;
+        height: 18px;
+        border-radius: 999px;
+        background: #374151;
+        position: relative;
+        transition: background 120ms ease-out;
+      }
+      .toggle-pill-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: white;
+        transition: transform 120ms ease-out;
+      }
+      .toggle input:checked + .toggle-pill .toggle-pill-thumb {
+        transform: translateX(14px);
+      }
+      .toggle input:checked + .toggle-pill {
+        background: #22c55e;
+      }
+      .metric-controls-status {
+        font-size: 0.7rem;
+        color: #9ca3af;
+      }
       .empty {
         font-size: 0.9rem;
         color: #9ca3af;
@@ -184,6 +252,13 @@
       <div id="emptyState" class="empty" style="display: none">
         No Nucleares metrics found yet. Ensure the exporter is running and that `/metrics` is reachable.
       </div>
+      <h2 style="margin-top: 28px; font-size: 0.95rem; color: #9ca3af; font-weight: 500">
+        Control variables (POST)
+      </h2>
+      <div id="postControlsContainer" class="metrics-grid" style="margin-top: 8px"></div>
+      <div id="postEmptyState" class="empty" style="display: none">
+        No POST variables discovered yet. They are parsed from the Nucleares web page on server startup.
+      </div>
     </main>
 
     <script>
@@ -195,6 +270,8 @@
       const intervalInput = document.getElementById('intervalInput');
       const refreshNowBtn = document.getElementById('refreshNowBtn');
       const toggleAutoBtn = document.getElementById('toggleAutoBtn');
+      const postControlsContainer = document.getElementById('postControlsContainer');
+      const postEmptyState = document.getElementById('postEmptyState');
 
       let refreshIntervalMs = 30000;
       let intervalId = null;
@@ -202,6 +279,7 @@
       // key: variable name (or metric name as fallback) -> { history: [{t, v}], dom: { ... } }
       const metricState = {};
       const MAX_POINTS = 60;
+      let postVariables = [];
 
       function humanizeVariableName(name) {
         return name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -210,10 +288,15 @@
       function classifyValue(rawValue) {
         const num = Number(rawValue);
         if (!Number.isNaN(num)) {
-          if (num === 0 || num === 1) return { type: 'boolean-ish', display: num === 1 ? 'On' : 'Off' };
           return { type: 'number', display: rawValue };
         }
         return { type: 'string', display: rawValue };
+      }
+
+      function getStem(name) {
+        const parts = name.split('_');
+        if (parts.length <= 1) return name;
+        return parts.slice(0, parts.length - 1).join('_');
       }
 
       function drawSparkline(canvas, history) {
@@ -249,7 +332,7 @@
         ctx.stroke();
       }
 
-      function ensureMetricCard(key, metric) {
+      function ensureMetricCard(key, metric, controlVarsForMetric) {
         // Reuse existing DOM if we already know this metric
         if (metricState[key] && metricState[key].dom) {
           const { card } = metricState[key].dom;
@@ -296,6 +379,123 @@
         card.appendChild(promEl);
         card.appendChild(typeEl);
         card.appendChild(chartWrapper);
+
+        if (controlVarsForMetric && controlVarsForMetric.length) {
+          const controls = document.createElement('div');
+          controls.className = 'metric-controls';
+
+          controlVarsForMetric.forEach((controlVar) => {
+            const row = document.createElement('div');
+            row.className = 'metric-controls-row';
+
+            const label = document.createElement('div');
+            label.textContent = controlVar.split('_').slice(-1)[0].toLowerCase();
+            label.style.textTransform = 'capitalize';
+
+            // Heuristic: POST variables ending in SWITCH/STOP/TRIP/RESET/OPEN/CLOSE/EMERGENCY are treated as booleans.
+            // MODE and ORDERED remain text/number respectively.
+            // Match whole words/suffixes, not substrings (e.g., OPENING should not match OPEN)
+            const isBoolLike = /_(SWITCH|STOP|TRIP|RESET|OPEN|CLOSE|EMERGENCY)$|^(SWITCH|STOP|TRIP|RESET|OPEN|CLOSE|EMERGENCY)_/i.test(controlVar);
+
+            const statusEl = document.createElement('div');
+            statusEl.className = 'metric-controls-status';
+
+            async function send(value) {
+              statusEl.textContent = 'Sending…';
+              try {
+                const res = await fetch('/api/post-variable', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ variable: controlVar, value }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.ok === false) {
+                  throw new Error(data.error || `HTTP ${res.status}`);
+                }
+                statusEl.textContent = 'OK';
+              } catch (err) {
+                console.error('Failed to set POST variable', err);
+                statusEl.textContent = 'Error: ' + err.message;
+              }
+            }
+
+            if (isBoolLike) {
+              const toggleLabel = document.createElement('label');
+              toggleLabel.className = 'toggle';
+
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+
+              const pill = document.createElement('span');
+              pill.className = 'toggle-pill';
+              const thumb = document.createElement('span');
+              thumb.className = 'toggle-pill-thumb';
+              pill.appendChild(thumb);
+
+              const text = document.createElement('span');
+              text.textContent = 'Off';
+              text.style.fontSize = '0.78rem';
+              text.style.color = '#d1d5db';
+
+              checkbox.addEventListener('change', () => {
+                text.textContent = checkbox.checked ? 'On' : 'Off';
+              });
+
+              toggleLabel.appendChild(checkbox);
+              toggleLabel.appendChild(pill);
+              toggleLabel.appendChild(text);
+
+              const btn = document.createElement('button');
+              btn.textContent = 'Send';
+
+              btn.addEventListener('click', () => {
+                const value = checkbox.checked ? 'true' : 'false';
+                send(value);
+              });
+
+              row.appendChild(label);
+              row.appendChild(toggleLabel);
+              row.appendChild(btn);
+              controls.appendChild(row);
+              controls.appendChild(statusEl);
+            } else {
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.placeholder = 'Value';
+
+              const btn = document.createElement('button');
+              btn.textContent = 'Send';
+
+              btn.addEventListener('click', () => {
+                const value = input.value;
+                if (!value.length) {
+                  statusEl.textContent = 'Enter a value.';
+                  return;
+                }
+                send(value);
+              });
+
+              input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                  const value = input.value;
+                  if (!value.length) {
+                    statusEl.textContent = 'Enter a value.';
+                    return;
+                  }
+                  send(value);
+                }
+              });
+
+              row.appendChild(label);
+              row.appendChild(input);
+              row.appendChild(btn);
+              controls.appendChild(row);
+              controls.appendChild(statusEl);
+            }
+          });
+
+          card.appendChild(controls);
+        }
 
         metricsContainer.appendChild(card);
 
@@ -384,14 +584,19 @@
 
           for (const m of metrics) {
             const classification = classifyValue(m.value);
-            m.typeLabel = `${m.promType}${classification.type === 'boolean-ish' ? ' · boolean' : ''}`;
+            m.typeLabel = m.promType;
+            m.classification = classification;
 
             const numeric = Number(m.value);
             if (!Number.isNaN(numeric)) {
               updateMetricHistory(m.key, numeric);
             }
 
-            const dom = ensureMetricCard(m.key, m);
+            const variableName = m.variable || m.name.replace(/^nucleares_/, '').toUpperCase();
+            const stem = getStem(variableName);
+            const controlVarsForMetric = postVariables.filter((pv) => getStem(pv) === stem);
+
+            const dom = ensureMetricCard(m.key, m, controlVarsForMetric);
             dom.valueEl.textContent = classification.display;
             dom.typeEl.textContent = m.typeLabel;
             drawSparkline(dom.canvas, metricState[m.key]?.history || []);
@@ -436,9 +641,24 @@
         }
       });
 
-      // Initial load
-      fetchAndRenderMetrics();
-      startAutoRefresh();
+      async function fetchPostVariables() {
+        try {
+          const res = await fetch('/api/post-variables');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          postVariables = Array.isArray(data.variables) ? data.variables : [];
+        } catch (err) {
+          console.error('Failed to load POST variables', err);
+          postVariables = [];
+        }
+      }
+
+      // Initial load: load POST variable list first so controls can attach, then start metrics
+      (async () => {
+        await fetchPostVariables();
+        await fetchAndRenderMetrics();
+        startAutoRefresh();
+      })();
     </script>
   </body>
   </html>

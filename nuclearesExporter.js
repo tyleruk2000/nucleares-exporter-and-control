@@ -17,6 +17,7 @@ register.registerMetric(requestCounter);
 // Dynamic Nucleares variable gauges
 const nuclearesVariableGauges = new Map(); // name -> { gauge, type }
 let nuclearesInitialised = false;
+let nuclearesPostVariables = []; // array of POST variable names
 
 function sanitiseMetricName(name) {
   return name
@@ -105,6 +106,20 @@ async function discoverNuclearesVariables() {
 
   nuclearesInitialised = true;
   console.log(`Discovered ${nuclearesVariableGauges.size} Nucleares GET variables`);
+
+  // Parse POST variables from the same root HTML
+  if (end !== -1) {
+    const postSection = rootText.slice(end, rootText.length);
+    const postVars = [];
+    const postRegex = /<b>([^<]+)<\/b>/g;
+    for (;;) {
+      const m = postRegex.exec(postSection);
+      if (!m) break;
+      postVars.push(m[1].trim());
+    }
+    nuclearesPostVariables = postVars;
+    console.log(`Discovered ${nuclearesPostVariables.length} Nucleares POST variables`);
+  }
 }
 
 async function refreshNuclearesMetrics() {
@@ -136,11 +151,29 @@ async function refreshNuclearesMetrics() {
   );
 }
 
+function getNuclearesPostVariables() {
+  return [...nuclearesPostVariables];
+}
+
+async function setNuclearesVariable(name, value) {
+  const baseUrl = config.nuclearesUrl.replace(/\/+$/, '');
+  const url = `${baseUrl}/?variable=${encodeURIComponent(name)}&value=${encodeURIComponent(value)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  const res = await fetch(url, { method: 'POST', signal: controller.signal });
+  clearTimeout(timeout);
+  if (!res.ok) {
+    throw new Error(`Failed to POST to Nucleares for ${name}: ${res.status} ${res.statusText}`);
+  }
+}
+
 module.exports = {
   register,
   requestCounter,
   discoverNuclearesVariables,
   refreshNuclearesMetrics,
+  getNuclearesPostVariables,
+  setNuclearesVariable,
 };
 
 
