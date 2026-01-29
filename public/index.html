@@ -2,147 +2,443 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Nucleares Control Panel</title>
+    <title>Nucleares Metrics Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         margin: 0;
-        background: #050816;
+        background: radial-gradient(circle at top, #1e293b 0, #020617 45%, #000 100%);
         color: #e5e7eb;
-        display: flex;
-        justify-content: center;
-        align-items: center;
         min-height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
-      .card {
-        background: linear-gradient(145deg, #020617, #020617);
-        border-radius: 16px;
-        padding: 24px 28px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        max-width: 420px;
-        width: 100%;
+      header {
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        backdrop-filter: blur(16px);
+        background: rgba(15, 23, 42, 0.9);
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
-      h1 {
-        margin-top: 0;
-        font-size: 1.4rem;
-        letter-spacing: 0.05em;
+      header h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         color: #a5b4fc;
       }
-      .metric {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 8px;
-        font-size: 0.95rem;
+      header .sub {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        margin-top: 4px;
       }
-      .label {
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.85rem;
+      }
+      .controls label {
         color: #9ca3af;
       }
-      .value {
+      .controls input {
+        width: 72px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(15, 23, 42, 0.9);
         color: #e5e7eb;
-        font-weight: 600;
+        font-size: 0.8rem;
       }
-      .status {
-        margin-top: 12px;
-        font-size: 0.9rem;
-        color: #a5b4fc;
-      }
-      .updated {
-        margin-top: 4px;
-        font-size: 0.75rem;
-        color: #6b7280;
-      }
-      .slider-row {
-        margin-top: 18px;
-      }
-      input[type='range'] {
-        width: 100%;
-      }
-      button {
-        margin-top: 10px;
-        width: 100%;
-        padding: 8px 12px;
+      .controls button {
+        padding: 6px 12px;
         border-radius: 999px;
         border: none;
         background: linear-gradient(90deg, #4f46e5, #6366f1);
         color: white;
+        font-size: 0.8rem;
         font-weight: 600;
         cursor: pointer;
       }
-      button:disabled {
-        opacity: 0.6;
+      .controls button.secondary {
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+      }
+      .controls button:disabled {
+        opacity: 0.5;
         cursor: default;
       }
-      .hint {
-        margin-top: 10px;
-        font-size: 0.75rem;
+      main {
+        padding: 16px 24px 32px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 0.8rem;
+        color: #9ca3af;
+        margin-bottom: 16px;
+      }
+      .meta span strong {
+        color: #e5e7eb;
+      }
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 14px;
+      }
+      .metric-card {
+        background: rgba(15, 23, 42, 0.92);
+        border-radius: 12px;
+        padding: 10px 12px 10px;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .metric-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .metric-name {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #e5e7eb;
+        word-break: break-word;
+      }
+      .metric-prom {
+        font-size: 0.7rem;
         color: #6b7280;
+        word-break: break-all;
+      }
+      .metric-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #a5b4fc;
+      }
+      .metric-type {
+        font-size: 0.7rem;
+        color: #9ca3af;
+      }
+      .metric-chart {
+        margin-top: 4px;
+      }
+      .metric-chart canvas {
+        width: 100%;
+        height: 40px;
+        display: block;
+      }
+      .empty {
+        font-size: 0.9rem;
+        color: #9ca3af;
+        margin-top: 24px;
+      }
+      @media (max-width: 640px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .controls {
+          width: 100%;
+          justify-content: space-between;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>Nucleares Control</h1>
-      <div class="metric">
-        <span class="label">Power level</span>
-        <span class="value" id="powerLevel">–</span>
+    <header>
+      <div>
+        <h1>Nucleares Metrics</h1>
+        <div class="sub">Live view of exported Nucleares variables (from /metrics)</div>
       </div>
-      <div class="metric">
-        <span class="label">Core temp</span>
-        <span class="value" id="temperature">–</span>
+      <div class="controls">
+        <label for="intervalInput">Refresh (s)</label>
+        <input id="intervalInput" type="number" min="5" max="600" step="5" value="30" />
+        <button id="refreshNowBtn">Refresh now</button>
+        <button id="toggleAutoBtn" class="secondary">Pause auto</button>
       </div>
-      <div class="status" id="status">Status: –</div>
-      <div class="updated" id="updated">Last update: –</div>
-
-      <div class="slider-row">
-        <input type="range" id="powerSlider" min="0" max="100" value="75" />
-        <button id="applyBtn">Apply power level</button>
-        <div class="hint">
-          Metrics available at <code>/metrics</code> for Prometheus scraping.
-        </div>
+    </header>
+    <main>
+      <div class="meta">
+        <span><strong>Status:</strong> <span id="statusText">Connecting…</span></span>
+        <span><strong>Last update:</strong> <span id="lastUpdateText">–</span></span>
+        <span><strong>Metrics:</strong> <span id="metricCountText">–</span></span>
       </div>
-    </div>
+      <div id="metricsContainer" class="metrics-grid"></div>
+      <div id="emptyState" class="empty" style="display: none">
+        No Nucleares metrics found yet. Ensure the exporter is running and that `/metrics` is reachable.
+      </div>
+    </main>
 
     <script>
-      async function fetchState() {
-        try {
-          const res = await fetch('/api/state');
-          const data = await res.json();
-          document.getElementById('powerLevel').textContent = (data.powerLevel * 100).toFixed(0) + '%';
-          document.getElementById('temperature').textContent = data.temperature + '°C';
-          document.getElementById('status').textContent = 'Status: ' + data.status;
-          document.getElementById('updated').textContent = 'Last update: ' + data.lastUpdated;
-          document.getElementById('powerSlider').value = (data.powerLevel * 100).toFixed(0);
-        } catch (e) {
-          document.getElementById('status').textContent = 'Status: offline';
-        }
+      const metricsContainer = document.getElementById('metricsContainer');
+      const emptyState = document.getElementById('emptyState');
+      const statusText = document.getElementById('statusText');
+      const lastUpdateText = document.getElementById('lastUpdateText');
+      const metricCountText = document.getElementById('metricCountText');
+      const intervalInput = document.getElementById('intervalInput');
+      const refreshNowBtn = document.getElementById('refreshNowBtn');
+      const toggleAutoBtn = document.getElementById('toggleAutoBtn');
+
+      let refreshIntervalMs = 30000;
+      let intervalId = null;
+
+      // key: variable name (or metric name as fallback) -> { history: [{t, v}], dom: { ... } }
+      const metricState = {};
+      const MAX_POINTS = 60;
+
+      function humanizeVariableName(name) {
+        return name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
       }
 
-      async function applyPower() {
-        const btn = document.getElementById('applyBtn');
-        btn.disabled = true;
-        try {
-          const level = Number(document.getElementById('powerSlider').value) / 100;
-          await fetch('/api/control', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ powerLevel: level }),
+      function classifyValue(rawValue) {
+        const num = Number(rawValue);
+        if (!Number.isNaN(num)) {
+          if (num === 0 || num === 1) return { type: 'boolean-ish', display: num === 1 ? 'On' : 'Off' };
+          return { type: 'number', display: rawValue };
+        }
+        return { type: 'string', display: rawValue };
+      }
+
+      function drawSparkline(canvas, history) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (!history || history.length < 2) {
+          ctx.strokeStyle = '#4b5563';
+          ctx.beginPath();
+          ctx.moveTo(0, h / 2);
+          ctx.lineTo(w, h / 2);
+          ctx.stroke();
+          return;
+        }
+
+        const values = history.map((p) => p.v);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = max - min || 1;
+
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        history.forEach((point, i) => {
+          const x = (i / (history.length - 1 || 1)) * (w - 2) + 1;
+          const norm = (point.v - min) / span;
+          const y = h - norm * (h - 4) - 2;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      function ensureMetricCard(key, metric) {
+        // Reuse existing DOM if we already know this metric
+        if (metricState[key] && metricState[key].dom) {
+          const { card } = metricState[key].dom;
+          // The container is cleared on each refresh, so we need to re-append existing cards
+          if (!card.parentElement) {
+            metricsContainer.appendChild(card);
+          }
+          return metricState[key].dom;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'metric-card';
+
+        const header = document.createElement('div');
+        header.className = 'metric-header';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'metric-name';
+        nameEl.textContent = humanizeVariableName(metric.variable || metric.name);
+
+        const valueEl = document.createElement('div');
+        valueEl.className = 'metric-value';
+        valueEl.textContent = metric.value;
+
+        header.appendChild(nameEl);
+        header.appendChild(valueEl);
+
+        const promEl = document.createElement('div');
+        promEl.className = 'metric-prom';
+        promEl.textContent = metric.name + (metric.variable ? ` {variable="${metric.variable}"}` : '');
+
+        const typeEl = document.createElement('div');
+        typeEl.className = 'metric-type';
+        typeEl.textContent = metric.typeLabel;
+
+        const chartWrapper = document.createElement('div');
+        chartWrapper.className = 'metric-chart';
+        const canvas = document.createElement('canvas');
+        canvas.width = 260;
+        canvas.height = 40;
+        chartWrapper.appendChild(canvas);
+
+        card.appendChild(header);
+        card.appendChild(promEl);
+        card.appendChild(typeEl);
+        card.appendChild(chartWrapper);
+
+        metricsContainer.appendChild(card);
+
+        if (!metricState[key]) metricState[key] = { history: [] };
+        metricState[key].dom = { card, nameEl, valueEl, typeEl, canvas };
+        return metricState[key].dom;
+      }
+
+      function updateMetricHistory(key, numericValue) {
+        if (!metricState[key]) metricState[key] = { history: [] };
+        const history = metricState[key].history;
+        history.push({ t: Date.now(), v: numericValue });
+        if (history.length > MAX_POINTS) history.splice(0, history.length - MAX_POINTS);
+      }
+
+      function parsePrometheus(text) {
+        const lines = text.split('\n');
+        const help = {};
+        const type = {};
+        const metrics = [];
+
+        for (const line of lines) {
+          if (!line || line.startsWith('# EOF')) continue;
+          if (line.startsWith('# HELP')) {
+            const parts = line.split(/\s+/, 4);
+            if (parts.length >= 3) help[parts[2]] = parts.slice(3).join(' ');
+            continue;
+          }
+          if (line.startsWith('# TYPE')) {
+            const parts = line.split(/\s+/, 4);
+            if (parts.length >= 3) type[parts[2]] = parts[3] || 'gauge';
+            continue;
+          }
+
+          if (!line.startsWith('nucleares_')) continue;
+
+          const match = /^([a-zA-Z_:][\w:]*)(\{[^}]*\})?\s+([^\s]+)\s*$/.exec(line);
+          if (!match) continue;
+
+          const name = match[1];
+          const labelsStr = match[2];
+          const value = match[3];
+
+          let variable = null;
+          if (labelsStr) {
+            const varMatch = /variable="([^"]*)"/.exec(labelsStr);
+            if (varMatch) variable = varMatch[1];
+          }
+
+          metrics.push({
+            key: variable || name,
+            name,
+            variable,
+            value,
+            help: help[name],
+            promType: type[name] || 'gauge',
           });
-          await fetchState();
-        } catch (e) {
-          console.error(e);
-        } finally {
-          btn.disabled = false;
+        }
+
+        return metrics;
+      }
+
+      async function fetchAndRenderMetrics() {
+        try {
+          statusText.textContent = 'Refreshing…';
+          const res = await fetch('/metrics');
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          const metrics = parsePrometheus(text);
+
+          metrics.sort((a, b) => a.key.localeCompare(b.key));
+
+          metricsContainer.innerHTML = '';
+
+          if (!metrics.length) {
+            emptyState.style.display = 'block';
+            metricCountText.textContent = '0';
+          } else {
+            emptyState.style.display = 'none';
+            metricCountText.textContent = String(metrics.length);
+          }
+
+          const now = new Date();
+          lastUpdateText.textContent = now.toLocaleTimeString();
+          statusText.textContent = 'Live';
+
+          for (const m of metrics) {
+            const classification = classifyValue(m.value);
+            m.typeLabel = `${m.promType}${classification.type === 'boolean-ish' ? ' · boolean' : ''}`;
+
+            const numeric = Number(m.value);
+            if (!Number.isNaN(numeric)) {
+              updateMetricHistory(m.key, numeric);
+            }
+
+            const dom = ensureMetricCard(m.key, m);
+            dom.valueEl.textContent = classification.display;
+            dom.typeEl.textContent = m.typeLabel;
+            drawSparkline(dom.canvas, metricState[m.key]?.history || []);
+          }
+        } catch (err) {
+          console.error('Failed to load /metrics', err);
+          statusText.textContent = 'Offline';
         }
       }
 
-      document.getElementById('applyBtn').addEventListener('click', applyPower);
-      fetchState();
-      setInterval(fetchState, 3000);
+      function startAutoRefresh() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(fetchAndRenderMetrics, refreshIntervalMs);
+      }
+
+      intervalInput.addEventListener('change', () => {
+        const value = Number(intervalInput.value);
+        if (!Number.isFinite(value) || value < 5) {
+          intervalInput.value = '5';
+          refreshIntervalMs = 5000;
+        } else {
+          refreshIntervalMs = value * 1000;
+        }
+        if (toggleAutoBtn.dataset.paused !== 'true') {
+          startAutoRefresh();
+        }
+      });
+
+      refreshNowBtn.addEventListener('click', () => {
+        fetchAndRenderMetrics();
+      });
+
+      toggleAutoBtn.addEventListener('click', () => {
+        if (toggleAutoBtn.dataset.paused === 'true') {
+          toggleAutoBtn.dataset.paused = 'false';
+          toggleAutoBtn.textContent = 'Pause auto';
+          startAutoRefresh();
+        } else {
+          toggleAutoBtn.dataset.paused = 'true';
+          toggleAutoBtn.textContent = 'Resume auto';
+          if (intervalId) clearInterval(intervalId);
+        }
+      });
+
+      // Initial load
+      fetchAndRenderMetrics();
+      startAutoRefresh();
     </script>
   </body>
   </html>
-
-
