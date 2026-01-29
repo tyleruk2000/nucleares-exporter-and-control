@@ -67,7 +67,7 @@ A Prometheus exporter and web-based controller for Nucleares
 2. Build and start the container:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Access the application:
@@ -78,13 +78,13 @@ A Prometheus exporter and web-based controller for Nucleares
 4. View logs:
 
    ```bash
-   docker-compose logs -f
+   docker compose logs -f
    ```
 
 5. Stop the container:
 
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 ### Using Docker directly
