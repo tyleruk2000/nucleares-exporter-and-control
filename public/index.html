@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nucleares Control Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        background: #050816;
+        color: #e5e7eb;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .card {
+        background: linear-gradient(145deg, #020617, #020617);
+        border-radius: 16px;
+        padding: 24px 28px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        max-width: 420px;
+        width: 100%;
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 1.4rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #a5b4fc;
+      }
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+      }
+      .label {
+        color: #9ca3af;
+      }
+      .value {
+        color: #e5e7eb;
+        font-weight: 600;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 0.9rem;
+        color: #a5b4fc;
+      }
+      .updated {
+        margin-top: 4px;
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+      .slider-row {
+        margin-top: 18px;
+      }
+      input[type='range'] {
+        width: 100%;
+      }
+      button {
+        margin-top: 10px;
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(90deg, #4f46e5, #6366f1);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Nucleares Control</h1>
+      <div class="metric">
+        <span class="label">Power level</span>
+        <span class="value" id="powerLevel">–</span>
+      </div>
+      <div class="metric">
+        <span class="label">Core temp</span>
+        <span class="value" id="temperature">–</span>
+      </div>
+      <div class="status" id="status">Status: –</div>
+      <div class="updated" id="updated">Last update: –</div>
+
+      <div class="slider-row">
+        <input type="range" id="powerSlider" min="0" max="100" value="75" />
+        <button id="applyBtn">Apply power level</button>
+        <div class="hint">
+          Metrics available at <code>/metrics</code> for Prometheus scraping.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function fetchState() {
+        try {
+          const res = await fetch('/api/state');
+          const data = await res.json();
+          document.getElementById('powerLevel').textContent = (data.powerLevel * 100).toFixed(0) + '%';
+          document.getElementById('temperature').textContent = data.temperature + '°C';
+          document.getElementById('status').textContent = 'Status: ' + data.status;
+          document.getElementById('updated').textContent = 'Last update: ' + data.lastUpdated;
+          document.getElementById('powerSlider').value = (data.powerLevel * 100).toFixed(0);
+        } catch (e) {
+          document.getElementById('status').textContent = 'Status: offline';
+        }
+      }
+
+      async function applyPower() {
+        const btn = document.getElementById('applyBtn');
+        btn.disabled = true;
+        try {
+          const level = Number(document.getElementById('powerSlider').value) / 100;
+          await fetch('/api/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ powerLevel: level }),
+          });
+          await fetchState();
+        } catch (e) {
+          console.error(e);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      document.getElementById('applyBtn').addEventListener('click', applyPower);
+      fetchState();
+      setInterval(fetchState, 3000);
+    </script>
+  </body>
+  </html>
+
+

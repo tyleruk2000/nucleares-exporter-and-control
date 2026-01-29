@@ -1,2 +1,2 @@
 # nucleares-exporter-and-control
-A Promethoes exporter and webbased controller for nucleares
+A Prometheus exporter and web-based controller for Nucleares
