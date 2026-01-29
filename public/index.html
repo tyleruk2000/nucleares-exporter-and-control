@@ -216,6 +216,74 @@
         color: #9ca3af;
         margin-top: 24px;
       }
+      .category-section {
+        margin-bottom: 24px;
+      }
+      .category-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 8px;
+        border: 1px solid rgba(31, 41, 55, 0.9);
+        cursor: pointer;
+        user-select: none;
+        margin-bottom: 10px;
+        transition: background 0.2s;
+      }
+      .category-header:hover {
+        background: rgba(15, 23, 42, 1);
+      }
+      .category-header h3 {
+        margin: 0;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #a5b4fc;
+        flex: 1;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .category-toggle {
+        font-size: 0.7rem;
+        color: #6b7280;
+        font-weight: 500;
+      }
+      .category-count {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        background: rgba(31, 41, 55, 0.8);
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .category-content {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 14px;
+      }
+      .category-content.collapsed {
+        display: none;
+      }
+      .expand-all-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        font-size: 0.8rem;
+      }
+      .expand-all-controls button {
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: none;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        color: #e5e7eb;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .expand-all-controls button:hover {
+        background: rgba(15, 23, 42, 1);
+      }
       @media (max-width: 640px) {
         header {
           flex-direction: column;
@@ -248,7 +316,11 @@
         <span><strong>Last update:</strong> <span id="lastUpdateText">–</span></span>
         <span><strong>Metrics:</strong> <span id="metricCountText">–</span></span>
       </div>
-      <div id="metricsContainer" class="metrics-grid"></div>
+      <div class="expand-all-controls">
+        <button id="expandAllBtn">Expand all</button>
+        <button id="collapseAllBtn">Collapse all</button>
+      </div>
+      <div id="metricsContainer"></div>
       <div id="emptyState" class="empty" style="display: none">
         No Nucleares metrics found yet. Ensure the exporter is running and that `/metrics` is reachable.
       </div>
@@ -272,6 +344,8 @@
       const toggleAutoBtn = document.getElementById('toggleAutoBtn');
       const postControlsContainer = document.getElementById('postControlsContainer');
       const postEmptyState = document.getElementById('postEmptyState');
+      const expandAllBtn = document.getElementById('expandAllBtn');
+      const collapseAllBtn = document.getElementById('collapseAllBtn');
 
       let refreshIntervalMs = 30000;
       let intervalId = null;
@@ -283,6 +357,19 @@
 
       function humanizeVariableName(name) {
         return name.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+
+      function getCategory(variableName) {
+        if (!variableName) return 'Other';
+        const parts = variableName.split('_');
+        if (parts.length > 0 && parts[0]) {
+          return parts[0];
+        }
+        return 'Other';
+      }
+
+      function getCategoryDisplayName(category) {
+        return category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
       }
 
       function classifyValue(rawValue) {
@@ -335,11 +422,6 @@
       function ensureMetricCard(key, metric, controlVarsForMetric) {
         // Reuse existing DOM if we already know this metric
         if (metricState[key] && metricState[key].dom) {
-          const { card } = metricState[key].dom;
-          // The container is cleared on each refresh, so we need to re-append existing cards
-          if (!card.parentElement) {
-            metricsContainer.appendChild(card);
-          }
           return metricState[key].dom;
         }
 
@@ -497,7 +579,7 @@
           card.appendChild(controls);
         }
 
-        metricsContainer.appendChild(card);
+        // Don't append here - will be appended to category content in fetchAndRenderMetrics
 
         if (!metricState[key]) metricState[key] = { history: [] };
         metricState[key].dom = { card, nameEl, valueEl, typeEl, canvas };
@@ -558,6 +640,44 @@
         return metrics;
       }
 
+      function createCategorySection(category, metrics) {
+        const section = document.createElement('div');
+        section.className = 'category-section';
+        section.dataset.category = category;
+
+        const header = document.createElement('div');
+        header.className = 'category-header';
+
+        const title = document.createElement('h3');
+        title.textContent = getCategoryDisplayName(category);
+
+        const count = document.createElement('span');
+        count.className = 'category-count';
+        count.textContent = metrics.length;
+
+        const toggle = document.createElement('span');
+        toggle.className = 'category-toggle';
+        toggle.textContent = '▼';
+
+        header.appendChild(title);
+        header.appendChild(count);
+        header.appendChild(toggle);
+
+        const content = document.createElement('div');
+        content.className = 'category-content';
+
+        header.addEventListener('click', () => {
+          const isCollapsed = content.classList.contains('collapsed');
+          content.classList.toggle('collapsed');
+          toggle.textContent = isCollapsed ? '▼' : '▶';
+        });
+
+        section.appendChild(header);
+        section.appendChild(content);
+
+        return { section, content };
+      }
+
       async function fetchAndRenderMetrics() {
         try {
           statusText.textContent = 'Refreshing…';
@@ -573,34 +693,60 @@
           if (!metrics.length) {
             emptyState.style.display = 'block';
             metricCountText.textContent = '0';
-          } else {
-            emptyState.style.display = 'none';
-            metricCountText.textContent = String(metrics.length);
+            return;
+          }
+
+          emptyState.style.display = 'none';
+          metricCountText.textContent = String(metrics.length);
+
+          // Group metrics by category
+          const metricsByCategory = {};
+          for (const m of metrics) {
+            const variableName = m.variable || m.name.replace(/^nucleares_/, '').toUpperCase();
+            const category = getCategory(variableName);
+            if (!metricsByCategory[category]) {
+              metricsByCategory[category] = [];
+            }
+            metricsByCategory[category].push(m);
+          }
+
+          // Sort categories
+          const sortedCategories = Object.keys(metricsByCategory).sort();
+
+          // Render each category
+          for (const category of sortedCategories) {
+            const categoryMetrics = metricsByCategory[category];
+            const { section, content } = createCategorySection(category, categoryMetrics);
+
+            for (const m of categoryMetrics) {
+              const classification = classifyValue(m.value);
+              m.typeLabel = m.promType;
+              m.classification = classification;
+
+              const numeric = Number(m.value);
+              if (!Number.isNaN(numeric)) {
+                updateMetricHistory(m.key, numeric);
+              }
+
+              const variableName = m.variable || m.name.replace(/^nucleares_/, '').toUpperCase();
+              const stem = getStem(variableName);
+              const controlVarsForMetric = postVariables.filter((pv) => getStem(pv) === stem);
+
+              const dom = ensureMetricCard(m.key, m, controlVarsForMetric);
+              dom.valueEl.textContent = classification.display;
+              dom.typeEl.textContent = m.typeLabel;
+              drawSparkline(dom.canvas, metricState[m.key]?.history || []);
+
+              // Move the card to the category content
+              content.appendChild(dom.card);
+            }
+
+            metricsContainer.appendChild(section);
           }
 
           const now = new Date();
           lastUpdateText.textContent = now.toLocaleTimeString();
           statusText.textContent = 'Live';
-
-          for (const m of metrics) {
-            const classification = classifyValue(m.value);
-            m.typeLabel = m.promType;
-            m.classification = classification;
-
-            const numeric = Number(m.value);
-            if (!Number.isNaN(numeric)) {
-              updateMetricHistory(m.key, numeric);
-            }
-
-            const variableName = m.variable || m.name.replace(/^nucleares_/, '').toUpperCase();
-            const stem = getStem(variableName);
-            const controlVarsForMetric = postVariables.filter((pv) => getStem(pv) === stem);
-
-            const dom = ensureMetricCard(m.key, m, controlVarsForMetric);
-            dom.valueEl.textContent = classification.display;
-            dom.typeEl.textContent = m.typeLabel;
-            drawSparkline(dom.canvas, metricState[m.key]?.history || []);
-          }
         } catch (err) {
           console.error('Failed to load /metrics', err);
           statusText.textContent = 'Offline';
@@ -639,6 +785,26 @@
           toggleAutoBtn.textContent = 'Resume auto';
           if (intervalId) clearInterval(intervalId);
         }
+      });
+
+      expandAllBtn.addEventListener('click', () => {
+        const sections = metricsContainer.querySelectorAll('.category-section');
+        sections.forEach((section) => {
+          const content = section.querySelector('.category-content');
+          const toggle = section.querySelector('.category-toggle');
+          content.classList.remove('collapsed');
+          toggle.textContent = '▼';
+        });
+      });
+
+      collapseAllBtn.addEventListener('click', () => {
+        const sections = metricsContainer.querySelectorAll('.category-section');
+        sections.forEach((section) => {
+          const content = section.querySelector('.category-content');
+          const toggle = section.querySelector('.category-toggle');
+          content.classList.add('collapsed');
+          toggle.textContent = '▶';
+        });
       });
 
       async function fetchPostVariables() {
