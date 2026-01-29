@@ -392,7 +392,7 @@
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
 
-        if (!history || history.length < 2) {
+        if (!history || history.length === 0) {
           ctx.strokeStyle = '#4b5563';
           ctx.beginPath();
           ctx.moveTo(0, h / 2);
@@ -401,7 +401,10 @@
           return;
         }
 
-        const values = history.map((p) => p.v);
+        // If we only have a single point, duplicate it so we can render a proper line immediately.
+        const points = history.length === 1 ? [history[0], history[0]] : history;
+
+        const values = points.map((p) => p.v);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min || 1;
@@ -409,8 +412,8 @@
         ctx.strokeStyle = '#6366f1';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        history.forEach((point, i) => {
-          const x = (i / (history.length - 1 || 1)) * (w - 2) + 1;
+        points.forEach((point, i) => {
+          const x = (i / (points.length - 1 || 1)) * (w - 2) + 1;
           const norm = (point.v - min) / span;
           const y = h - norm * (h - 4) - 2;
           if (i === 0) ctx.moveTo(x, y);
