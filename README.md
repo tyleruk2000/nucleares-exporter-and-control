@@ -52,3 +52,71 @@ A Prometheus exporter and web-based controller for Nucleares
     - Other POST variables → text input.
   - All controls call `POST /api/post-variable`, which in turn posts to the real Nucleares endpoint.
 
+## Running with Docker
+
+### Using Docker Compose (recommended)
+
+1. Ensure `config.json` is configured with your Nucleares URL:
+
+   ```json
+   {
+     "nuclearesUrl": "http://192.168.1.215:8785/"
+   }
+   ```
+
+2. Build and start the container:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Access the application:
+
+   - **Web UI**: `http://localhost:3031/`
+   - **Prometheus metrics**: `http://localhost:3031/metrics`
+
+4. View logs:
+
+   ```bash
+   docker-compose logs -f
+   ```
+
+5. Stop the container:
+
+   ```bash
+   docker-compose down
+   ```
+
+### Using Docker directly
+
+1. Build the image:
+
+   ```bash
+   docker build -t nucleares-exporter-and-control .
+   ```
+
+2. Run the container:
+
+   ```bash
+   docker run -d \
+     --name nucleares-exporter \
+     -p 3031:3031 \
+     -v $(pwd)/config.json:/app/config.json:ro \
+     -e PORT=3031 \
+     nucleares-exporter-and-control
+   ```
+
+3. Access the application:
+
+   - **Web UI**: `http://localhost:3031/`
+   - **Prometheus metrics**: `http://localhost:3031/metrics`
+
+4. Stop the container:
+
+   ```bash
+   docker stop nucleares-exporter
+   docker rm nucleares-exporter
+   ```
+
+**Note**: The `config.json` file is mounted as read-only in the container, so you can edit it on the host and restart the container to pick up changes.
+
