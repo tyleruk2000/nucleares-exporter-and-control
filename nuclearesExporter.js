@@ -42,10 +42,26 @@ function parseNuclearesValue(raw) {
   return { type: 'string', value };
 }
 
+const HEALTH_CHECK_TIMEOUT_MS = 3000;
+const FETCH_TIMEOUT_MS = 8000;
+
+async function checkNuclearesOnline() {
+  const baseUrl = config.nuclearesUrl.replace(/\/+$/, '');
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+    const res = await fetch(baseUrl + '/', { signal: controller.signal });
+    clearTimeout(timeout);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchText(url) {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) {
@@ -60,6 +76,10 @@ async function fetchText(url) {
 
 async function discoverNuclearesVariables() {
   const baseUrl = config.nuclearesUrl.replace(/\/+$/, '');
+  if (!(await checkNuclearesOnline())) {
+    console.warn('Nucleares webserver is not reachable; skipping variable discovery');
+    return;
+  }
   const rootText = await fetchText(baseUrl + '/');
 
   const getMarker = '==== GET ====';
@@ -124,6 +144,9 @@ async function discoverNuclearesVariables() {
 
 async function refreshNuclearesMetrics() {
   if (!nuclearesInitialised || nuclearesVariableGauges.size === 0) return;
+  if (!(await checkNuclearesOnline())) {
+    return; // Keep last known values; skip refresh to avoid long timeouts
+  }
   const baseUrl = config.nuclearesUrl.replace(/\/+$/, '');
 
   await Promise.all(
